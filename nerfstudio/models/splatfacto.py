@@ -161,6 +161,10 @@ class SplatfactoModelConfig(ModelConfig):
     """Number of gaussians to initialize if random init is used"""
     random_scale: float = 10.0
     "Size of the cube to initialize random gaussians within"
+    cluster_gaussians: bool = True
+    """If True, cluster gaussians based on their distances"""
+    cluster_threshold: float = 0.01
+    """Threshold for clustering gaussians"""
     ssim_lambda: float = 0.0
     """weight of ssim loss"""
     stop_split_at: int = 15000
@@ -519,6 +523,68 @@ class SplatfactoModel(Model):
 
             if deleted_mask is not None:
                 self.remove_from_all_optim(optimizers, deleted_mask)
+
+            def find_unique_clusters(distance_threshold):
+                """
+                Clusters nearby Gaussian points and merges them by averaging their parameters.
+
+                Args:
+                    distance_threshold (float): Maximum distance between points to be considered part of the same cluster.
+
+                Returns:
+                    Tuple containing:
+                        keep (torch.Tensor): Boolean mask indicating which points to keep
+                        cluster_means (torch.Tensor): Averaged positions for each remaining cluster
+                        cluster_scales (torch.Tensor): Averaged scales for each remaining cluster 
+                        cluster_opacities (torch.Tensor): Averaged opacities for each remaining cluster
+                """
+                device = self.means.device
+                num_points = self.means.size(0)
+                dist_matrix = torch.cdist(self.means, self.means).to(device)
+                
+
+                keep = torch.ones(num_points, dtype=torch.bool, device=device)               
+                cluster_means = torch.zeros_like(self.means)
+                cluster_scales = torch.zeros_like(self.scales)
+                cluster_opacities = torch.zeros_like(self.opacities)
+                
+                for i in range(num_points):
+                    # If the point has already been marked as redundant, skip it
+                    if not keep[i]:
+                        continue
+                    
+                    # Find points within threshold distance of neighbor
+                    # Average the means/scales/opacities of the neighbors
+                    neighbors = (dist_matrix[i] < distance_threshold) & keep
+                    
+                    cluster_points = self.means[neighbors]
+                    cluster_mean = (cluster_points).mean(dim=0)
+                    cluster_means[i] = cluster_mean
+
+                    physical_scales = torch.exp(self.scales[neighbors])
+                    physical_mean = physical_scales.mean(dim=0)
+                    cluster_scales[i] = torch.log(physical_mean)
+
+                    cluster_opacity = self.opacities[neighbors].mean(dim=0)
+                    cluster_opacities[i] = cluster_opacity
+                    
+                    # Only keep point i, mark its neighbors as redundant
+                    keep[neighbors] = False
+                    keep[i] = True
+                
+                # Return both the keep mask and cluster means
+                return keep, cluster_means[keep], cluster_scales[keep], cluster_opacities[keep]
+
+            if(self.step < self.config.stop_split_at and self.config.cluster_gaussians):
+                threshold = self.config.cluster_threshold
+                keep, means, scales, opacities = find_unique_clusters(threshold)
+                print(f"Keeping {keep.sum().item()}/{self.num_points} gaussians")
+                for name, param in self.gauss_params.items():
+                    self.gauss_params[name] = torch.nn.Parameter(param[keep])
+                self.gauss_params["means"] = torch.nn.Parameter(means)
+                self.gauss_params["opacities"] = torch.nn.Parameter(opacities)
+                self.gauss_params["scales"] = torch.nn.Parameter(scales)
+                self.remove_from_all_optim(optimizers, ~keep)
 
             if self.step < self.config.stop_split_at and self.step % reset_interval == self.config.refine_every:
                 # Reset value is set to be twice of the cull_alpha_thresh
