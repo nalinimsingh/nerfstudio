@@ -273,6 +273,7 @@ class RenderStateMachine(threading.Thread):
             selected_output = torch.cat([selected_output[:, :split_index], split_output[:, split_index:]], dim=1)
             selected_output[:, split_index] = torch.tensor([0.133, 0.157, 0.192], device=selected_output.device)
 
+        selected_output = selected_output/torch.max(selected_output)
         selected_output = (selected_output * 255).type(torch.uint8)
         depth = (
             outputs["gl_z_buf_depth"].cpu().numpy() * self.viser_scale_ratio if "gl_z_buf_depth" in outputs else None

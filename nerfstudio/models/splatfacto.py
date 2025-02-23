@@ -236,10 +236,10 @@ class SplatfactoModel(Model):
             features_dc = torch.nn.Parameter(shs[:, 0, :])
             features_rest = torch.nn.Parameter(shs[:, 1:, :])
         else:
-            features_dc = torch.nn.Parameter(torch.rand(num_points, 3))
-            features_rest = torch.nn.Parameter(torch.zeros((num_points, dim_sh - 1, 3)))
+            features_dc = torch.tensor(torch.ones(num_points, 3))
+            features_rest = torch.tensor(torch.zeros((num_points, dim_sh - 1, 3)))
 
-        opacities = torch.nn.Parameter(torch.logit(0.1 * torch.ones(num_points, 1)))
+        opacities = torch.nn.Parameter(10 * torch.ones(num_points, 1))
         self.gauss_params = torch.nn.ParameterDict(
             {
                 "means": means,
@@ -514,7 +514,7 @@ class SplatfactoModel(Model):
                 reset_value = self.config.cull_alpha_thresh * 2.0
                 self.opacities.data = torch.clamp(
                     self.opacities.data,
-                    max=torch.logit(torch.tensor(reset_value, device=self.device)).item(),
+                    max=torch.tensor(reset_value, device=self.device).item(),
                 )
                 # reset the exp of optimizer
                 optim = optimizers.optimizers["opacities"]
@@ -534,7 +534,7 @@ class SplatfactoModel(Model):
         """
         n_bef = self.num_points
         # cull transparent ones
-        culls = (torch.sigmoid(self.opacities) < self.config.cull_alpha_thresh).squeeze()
+        culls = (self.opacities < self.config.cull_alpha_thresh).squeeze()
         below_alpha_count = torch.sum(culls).item()
         toobigs_count = 0
         if extra_cull_mask is not None:
@@ -761,7 +761,7 @@ class SplatfactoModel(Model):
             means=means_crop,
             quats=quats_crop / quats_crop.norm(dim=-1, keepdim=True),
             scales=torch.exp(scales_crop),
-            opacities=torch.sigmoid(opacities_crop).squeeze(-1),
+            opacities=torch.clamp(opacities_crop, 0).squeeze(-1),
             colors=colors_crop,
             viewmats=viewmat,  # [1, 4, 4]
             Ks=K,  # [1, 3, 3]
@@ -788,7 +788,6 @@ class SplatfactoModel(Model):
 
         background = self._get_background_color()
         rgb = render[:, ..., :3] + (1 - alpha) * background
-        rgb = torch.clamp(rgb, 0.0, 1.0)
 
         if render_mode == "RGB+ED":
             depth_im = render[:, ..., 3:4]
