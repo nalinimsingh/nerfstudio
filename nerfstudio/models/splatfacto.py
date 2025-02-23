@@ -776,6 +776,7 @@ class SplatfactoModel(Model):
             sparse_grad=False,
             absgrad=True,
             rasterize_mode=self.config.rasterize_mode,
+            ortho=True
             # set some threshold to disregrad small gaussians for faster rendering.
             # radius_clip=3.0,
         )
