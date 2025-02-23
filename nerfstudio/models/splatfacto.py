@@ -159,7 +159,7 @@ class SplatfactoModelConfig(ModelConfig):
     """Number of gaussians to initialize if random init is used"""
     random_scale: float = 10.0
     "Size of the cube to initialize random gaussians within"
-    ssim_lambda: float = 0.2
+    ssim_lambda: float = 0.0
     """weight of ssim loss"""
     stop_split_at: int = 15000
     """stop splitting at this step"""
