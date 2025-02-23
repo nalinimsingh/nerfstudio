@@ -786,7 +786,7 @@ class SplatfactoModel(Model):
         self.radii = info["radii"][0]  # [N]
         alpha = alpha[:, ...]
 
-        background = self._get_background_color()
+        background = self._get_background_color().cuda()
         rgb = render[:, ..., :3] + (1 - alpha) * background
 
         if render_mode == "RGB+ED":
@@ -921,7 +921,7 @@ class SplatfactoModel(Model):
             A dictionary of metrics.
         """
         gt_rgb = self.composite_with_background(self.get_gt_img(batch["image"]), outputs["background"])
-        predicted_rgb = outputs["rgb"]
+        predicted_rgb = self._downscale_if_required(outputs["rgb"])
 
         combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
 
