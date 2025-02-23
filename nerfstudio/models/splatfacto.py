@@ -805,6 +805,7 @@ class SplatfactoModel(Model):
             "depth": depth_im,  # type: ignore
             "accumulation": alpha.squeeze(0),  # type: ignore
             "background": background,  # type: ignore
+            "means": info["means2d"],
         }  # type: ignore
 
     def get_gt_img(self, image: torch.Tensor):
