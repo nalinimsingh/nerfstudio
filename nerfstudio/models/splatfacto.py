@@ -131,7 +131,9 @@ class SplatfactoModelConfig(ModelConfig):
     """Whether to randomize the background color."""
     num_downscales: int = 2
     """at the beginning, resolution is 1/2^d, where d is this number"""
-    cull_alpha_thresh: float = 0.1
+    force_isotropic: bool = True
+    """whether to keep isotropic Gaussians"""
+    cull_alpha_thresh: float = 0.005
     """threshold of opacity for culling gaussians. One can set it to a lower value (e.g. 0.005) for higher quality."""
     cull_scale_thresh: float = 0.5
     """threshold of scale for culling huge gaussians"""
@@ -216,7 +218,12 @@ class SplatfactoModel(Model):
         distances = torch.from_numpy(distances)
         # find the average of the three nearest neighbors for each point and use that as the scale
         avg_dist = distances.mean(dim=-1, keepdim=True)
-        scales = torch.nn.Parameter(torch.log(avg_dist.repeat(1, 3)))
+        if(self.config.force_isotropic):
+            scale = torch.nn.Parameter(torch.log(avg_dist.repeat(1, 1)))
+            scales = scale.repeat(1, 3)
+        else:
+            scale = None
+            scales = torch.nn.Parameter(torch.log(avg_dist.repeat(1, 3)))
         num_points = means.shape[0]
         quats = torch.nn.Parameter(random_quat_tensor(num_points))
         dim_sh = num_sh_bases(self.config.sh_degree)
@@ -251,6 +258,8 @@ class SplatfactoModel(Model):
                 "opacities": opacities,
             }
         )
+        if(self.config.force_isotropic):
+            self.gauss_params["scale"] = scale
 
         self.camera_optimizer: CameraOptimizer = self.config.camera_optimizer.setup(
             num_cameras=self.num_train_data, device="cpu"
@@ -637,9 +646,12 @@ class SplatfactoModel(Model):
     def get_gaussian_param_groups(self) -> Dict[str, List[Parameter]]:
         # Here we explicitly use the means, scales as parameters so that the user can override this function and
         # specify more if they want to add more optimizable params to gaussians.
+        param_list = ["means", "scales", "quats", "opacities"]
+        if(self.config.force_isotropic):
+            param_list[1] = "scale"
         return {
             name: [self.gauss_params[name]]
-            for name in ["means", "scales", "quats", "features_dc", "features_rest", "opacities"]
+            for name in param_list
         }
 
     def get_param_groups(self) -> Dict[str, List[Parameter]]:

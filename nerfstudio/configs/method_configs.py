@@ -626,6 +626,10 @@ method_configs["splatfacto"] = TrainerConfig(
             "optimizer": AdamOptimizerConfig(lr=0.05, eps=1e-15),
             "scheduler": None,
         },
+        "scale": {
+            "optimizer": AdamOptimizerConfig(lr=0.005, eps=1e-15),
+            "scheduler": None,
+        },
         "scales": {
             "optimizer": AdamOptimizerConfig(lr=0.005, eps=1e-15),
             "scheduler": None,
