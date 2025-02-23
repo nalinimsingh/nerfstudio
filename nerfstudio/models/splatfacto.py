@@ -34,6 +34,7 @@ except ImportError:
 from gsplat.cuda_legacy._wrapper import num_sh_bases
 from pytorch_msssim import SSIM
 from torch.nn import Parameter
+from torch.nn import MSELoss
 
 from nerfstudio.cameras.camera_optimizers import CameraOptimizer, CameraOptimizerConfig
 from nerfstudio.cameras.cameras import Cameras
@@ -262,6 +263,7 @@ class SplatfactoModel(Model):
         self.psnr = PeakSignalNoiseRatio(data_range=1.0)
         self.ssim = SSIM(data_range=1.0, size_average=True, channel=3)
         self.lpips = LearnedPerceptualImagePatchSimilarity(normalize=True)
+        self.l2 = MSELoss()
         self.step = 0
 
         self.crop_box: Optional[OrientedBox] = None
@@ -928,14 +930,16 @@ class SplatfactoModel(Model):
         # Switch images from [H, W, C] to [1, C, H, W] for metrics computations
         gt_rgb = torch.moveaxis(gt_rgb, -1, 0)[None, ...]
         predicted_rgb = torch.moveaxis(predicted_rgb, -1, 0)[None, ...]
-
-        psnr = self.psnr(gt_rgb, predicted_rgb)
-        ssim = self.ssim(gt_rgb, predicted_rgb)
-        lpips = self.lpips(gt_rgb, predicted_rgb)
+        norm = torch.maximum(torch.max(gt_rgb), torch.max(predicted_rgb))
+        psnr = self.psnr(gt_rgb/norm, predicted_rgb/norm)
+        ssim = self.ssim(gt_rgb/norm, predicted_rgb/norm)
+        lpips = self.lpips(gt_rgb/norm, predicted_rgb/norm)
+        l2 = self.l2(gt_rgb/norm, predicted_rgb/norm)
 
         # all of these metrics will be logged as scalars
         metrics_dict = {"psnr": float(psnr.item()), "ssim": float(ssim)}  # type: ignore
         metrics_dict["lpips"] = float(lpips)
+        metrics_dict["l2"] = float(l2)
 
         images_dict = {"img": combined_rgb}
 
