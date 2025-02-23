@@ -688,7 +688,7 @@ class SplatfactoModel(Model):
             raise ValueError(f"Unknown background color {self.config.background_color}")
         return background
 
-    def get_outputs(self, camera: Cameras) -> Dict[str, Union[torch.Tensor, List]]:
+    def get_outputs(self, camera: Cameras, near_plane=0.01, far_plane=1e10) -> Dict[str, Union[torch.Tensor, List]]:
         """Takes in a Ray Bundle and returns a dictionary of outputs.
 
         Args:
@@ -771,8 +771,8 @@ class SplatfactoModel(Model):
             height=H,
             tile_size=BLOCK_WIDTH,
             packed=False,
-            near_plane=0.01,
-            far_plane=1e10,
+            near_plane=near_plane,
+            far_plane=far_plane,
             render_mode=render_mode,
             sh_degree=sh_degree_to_use,
             sparse_grad=False,
@@ -897,7 +897,7 @@ class SplatfactoModel(Model):
         return loss_dict
 
     @torch.no_grad()
-    def get_outputs_for_camera(self, camera: Cameras, obb_box: Optional[OrientedBox] = None) -> Dict[str, torch.Tensor]:
+    def get_outputs_for_camera(self, camera: Cameras, obb_box: Optional[OrientedBox] = None, near_plane = 0.01, far_plane = 1e10) -> Dict[str, torch.Tensor]:
         """Takes in a camera, generates the raybundle, and computes the output of the model.
         Overridden for a camera-based gaussian model.
 
@@ -906,7 +906,7 @@ class SplatfactoModel(Model):
         """
         assert camera is not None, "must provide camera to gaussian model"
         self.set_crop(obb_box)
-        outs = self.get_outputs(camera.to(self.device))
+        outs = self.get_outputs(camera.to(self.device), near_plane = near_plane, far_plane = far_plane)
         return outs  # type: ignore
 
     def get_image_metrics_and_images(
