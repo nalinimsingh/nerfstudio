@@ -578,12 +578,17 @@ class SplatfactoModel(Model):
             if(self.step < self.config.stop_split_at and self.config.cluster_gaussians):
                 threshold = self.config.cluster_threshold
                 keep, means, scales, opacities = find_unique_clusters(threshold)
+                scale = scales[:,0:1]
                 print(f"Keeping {keep.sum().item()}/{self.num_points} gaussians")
                 for name, param in self.gauss_params.items():
                     self.gauss_params[name] = torch.nn.Parameter(param[keep])
                 self.gauss_params["means"] = torch.nn.Parameter(means)
                 self.gauss_params["opacities"] = torch.nn.Parameter(opacities)
-                self.gauss_params["scales"] = torch.nn.Parameter(scales)
+                if self.config.force_isotropic:
+                    self.gauss_params["scale"] = torch.nn.Parameter(scale)
+                    self.gauss_params["scales"] = scale.repeat(1, 3)
+                else:
+                    self.gauss_params["scales"] = torch.nn.Parameter(scales)
                 self.remove_from_all_optim(optimizers, ~keep)
 
             if self.step < self.config.stop_split_at and self.step % reset_interval == self.config.refine_every:
@@ -657,14 +662,19 @@ class SplatfactoModel(Model):
         # step 4, sample new scales
         size_fac = 1.6
         new_scales = torch.log(torch.exp(self.scales[split_mask]) / size_fac).repeat(samps, 1)
+        new_scale = new_scales[:,0:1]
         self.scales[split_mask] = torch.log(torch.exp(self.scales[split_mask]) / size_fac)
         # step 5, sample new quats
         new_quats = self.quats[split_mask].repeat(samps, 1)
+        if self.config.force_isotropic:
+            new_scales = new_scale.repeat(1, 3)
+
         out = {
             "means": new_means,
             "features_dc": new_features_dc,
             "features_rest": new_features_rest,
             "opacities": new_opacities,
+            "scale": new_scale,
             "scales": new_scales,
             "quats": new_quats,
         }
