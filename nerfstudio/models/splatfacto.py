@@ -141,7 +141,7 @@ class SplatfactoModelConfig(ModelConfig):
     """If True, continue to cull gaussians post refinement"""
     reset_alpha_every: int = 30
     """Every this many refinement steps, reset the alpha"""
-    densify_grad_thresh: float = 0.0008
+    densify_grad_thresh: float = 0.005
     """threshold of positional gradient norm for densifying gaussians"""
     densify_size_thresh: float = 0.01
     """below this size, gaussians are *duplicated*, otherwise split"""
@@ -157,13 +157,13 @@ class SplatfactoModelConfig(ModelConfig):
     """stop culling/splitting at this step WRT screen size of gaussians"""
     random_init: bool = False
     """whether to initialize the positions uniformly randomly (not SFM points)"""
-    num_random: int = 50000
+    num_random: int = 10000
     """Number of gaussians to initialize if random init is used"""
-    random_scale: float = 10.0
+    random_scale: float = 1.0
     "Size of the cube to initialize random gaussians within"
     cluster_gaussians: bool = True
     """If True, cluster gaussians based on their distances"""
-    cluster_threshold: float = 0.01
+    cluster_threshold: float = 0.015
     """Threshold for clustering gaussians"""
     ssim_lambda: float = 0.0
     """weight of ssim loss"""
