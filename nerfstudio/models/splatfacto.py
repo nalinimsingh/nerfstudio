@@ -345,7 +345,7 @@ class SplatfactoModel(Model):
             self.gauss_params[name] = torch.nn.Parameter(torch.zeros(new_shape, device=self.device))
         super().load_state_dict(dict, **kwargs)
 
-    def k_nearest_sklearn(self, x: torch.Tensor, k: int):
+    def k_nearest_sklearn(self, x: torch.Tensor, k: int, exclude_self: bool = True):
         """
             Find k-nearest neighbors using sklearn's NearestNeighbors.
         x: The data tensor of shape [num_samples, num_features]
@@ -363,7 +363,10 @@ class SplatfactoModel(Model):
         distances, indices = nn_model.kneighbors(x_np)
 
         # Exclude the point itself from the result and return
-        return distances[:, 1:].astype(np.float32), indices[:, 1:].astype(np.float32)
+        if exclude_self:
+            return distances[:, 1:].astype(np.float32), indices[:, 1:].astype(np.float32)
+        else:
+            return distances.astype(np.float32), indices.astype(np.float32)
 
     def remove_from_optim(self, optimizer, deleted_mask, new_params):
         """removes the deleted_mask from the optimizer provided"""
@@ -540,7 +543,14 @@ class SplatfactoModel(Model):
                 """
                 device = self.means.device
                 num_points = self.means.size(0)
-                dist_matrix = torch.cdist(self.means, self.means).to(device)
+                # Too memory intensive for large number of Gaussians
+                # dist_matrix = torch.cdist(self.means, self.means).to(device)
+
+                # Get 20 nearest neighbors for each point using sklearn
+                k = 20
+                distances, indices = self.k_nearest_sklearn(self.means, k, exclude_self=False)
+                distances = torch.from_numpy(distances).to(self.means.device)
+                indices = torch.from_numpy(indices).to(self.means.device, dtype=torch.long)
                 
 
                 keep = torch.ones(num_points, dtype=torch.bool, device=device)               
@@ -555,8 +565,9 @@ class SplatfactoModel(Model):
                     
                     # Find points within threshold distance of neighbor
                     # Average the means/scales/opacities of the neighbors
-                    neighbors = (dist_matrix[i] < distance_threshold) & keep
-                    
+                    neighbors = torch.zeros(num_points, dtype=torch.bool, device=device)
+                    neighbors[indices[i]] = (distances[i] < distance_threshold) & keep[indices[i]]
+
                     cluster_points = self.means[neighbors]
                     cluster_mean = (cluster_points).mean(dim=0)
                     cluster_means[i] = cluster_mean
