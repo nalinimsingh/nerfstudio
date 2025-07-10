@@ -903,7 +903,7 @@ class SplatfactoModel(Model):
             image: tensor.Tensor in type uint8 or float32
         """
         if image.dtype == torch.uint8:
-            image = image.float() / 255.0
+            image = image.float()
         gt_img = self._downscale_if_required(image)
         return gt_img.to(self.device)
 
@@ -1012,7 +1012,10 @@ class SplatfactoModel(Model):
             A dictionary of metrics.
         """
         gt_rgb = self.composite_with_background(self.get_gt_img(batch["image"]), outputs["background"])
-        predicted_rgb = self._downscale_if_required(outputs["rgb"])
+        if(gt_rgb.shape[0] != outputs["rgb"].shape[0]):
+            predicted_rgb = self._downscale_if_required(outputs["rgb"])
+        else:
+            predicted_rgb = outputs["rgb"]
 
         combined_rgb = torch.cat([gt_rgb, predicted_rgb], dim=1)
 
